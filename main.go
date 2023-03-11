@@ -41,15 +41,14 @@ func main() {
 		println(kind.MIME.Value)
 
 		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-			c.Send("start to download. please wait...")
+			c.Send("working on it... :)")
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Fatal(err)
 			}
 			defer resp.Body.Close()
-			c.Send("download finished. start sending...")
 
-			audio := &tele.Audio{File: tele.FromReader(resp.Body), Caption: "asaaa"}
+			audio := &tele.Audio{File: tele.FromReader(resp.Body)}
 
 			return c.Send(audio, &tele.SendOptions{
 				ReplyTo: c.Message(),
