@@ -3,5 +3,5 @@ version: '3.8'
 services:
   go:
     build: .
-    container_name: ${APP_NAME}-go
+    container_name: tel-url-to-files-go
     restart: unless-stopped
