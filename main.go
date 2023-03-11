@@ -17,8 +17,6 @@ var isIniInitOnce = false
 var IniData *ini.File
 
 func main() {
-	//kind, _ := filetype.MatchFile("https://ir-1.parsget.com/download/VPdaXRnlNg/Nila+-+Mishe.mp3")
-
 	pref := tele.Settings{
 		Token:  IniGet("", "TOKEN"),
 		Poller: &tele.LongPoller{Timeout: 60 * time.Second},
@@ -41,15 +39,14 @@ func main() {
 		println(kind.MIME.Value)
 
 		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-			c.Send("start to download. please wait...")
+			c.Send("working on it... :)")
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Fatal(err)
 			}
 			defer resp.Body.Close()
-			c.Send("download finished. start sending...")
 
-			audio := &tele.Audio{File: tele.FromReader(resp.Body), Caption: "asaaa"}
+			audio := &tele.Audio{File: tele.FromReader(resp.Body)}
 
 			return c.Send(audio, &tele.SendOptions{
 				ReplyTo: c.Message(),
