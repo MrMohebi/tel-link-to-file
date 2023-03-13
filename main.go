@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/MrMohebi/tel-link-to-file/common"
+	"github.com/MrMohebi/tel-link-to-file/spoty"
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/types"
 	"gopkg.in/ini.v1"
@@ -30,6 +31,10 @@ func main() {
 
 	b.Handle(tele.OnText, func(c tele.Context) error {
 		url := c.Text()
+		println(url[:24])
+		if url[:24] == "https://open.spotify.com" {
+			spoty.DownloadAndSave(url)
+		}
 
 		extension := filepath.Ext(url)
 		extension = strings.TrimLeft(extension, ".")
