@@ -11,4 +11,5 @@ FROM python:alpine3.16
 RUN pip install spotdl
 RUN spotdl --download-ffmpeg
 COPY --from=builder /app/main /
+COPY --from=builder /app/config.ini /
 CMD ["./main"]
