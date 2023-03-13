@@ -31,7 +31,7 @@ func main() {
 
 	b.Handle(tele.OnText, func(c tele.Context) error {
 		url := c.Text()
-		println(url[:24])
+		println(url)
 		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
 			spoty.DownloadAndSave(url)
 		}
