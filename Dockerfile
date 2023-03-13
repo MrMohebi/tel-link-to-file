@@ -9,5 +9,5 @@ RUN go build -o main .
 FROM python:alpine3.16
 RUN pip install spotdl
 RUN spotdl --download-ffmpeg
-COPY --from=builder /main.go /
+COPY --from=builder /main /
 CMD ["./main"]
