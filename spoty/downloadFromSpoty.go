@@ -3,14 +3,12 @@ package spoty
 import (
 	"github.com/MrMohebi/tel-link-to-file/common"
 	"os/exec"
-	"strings"
 )
 
 func DownloadAndSave(link string) {
-
-	cmd := exec.Command("spotdl", "download", link, "--output", "'/root/{artist} - {title}.{output-ext}'")
-	output, err := cmd.Output()
+	folderName := common.RandStr(5)
+	cmd := exec.Command("spotdl", "download", link, "--output", "'./"+folderName+"/{artist} - {title}.{output-ext}'")
+	_, err := cmd.Output()
 	common.IsErr(err)
-	println(strings.TrimSuffix(string(output), "\n"))
 
 }
