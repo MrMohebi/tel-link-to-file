@@ -5,10 +5,11 @@ import (
 	tele "gopkg.in/telebot.v3"
 	"os"
 	"os/exec"
+	"time"
 )
 
 func SaveAndSend(link string, c tele.Context) error {
-	err := c.Send("working on it... :)")
+	err := c.Send("ای کلک میخوای از اسپاتیفای دانلود کنی؟\nالان میرم تو کارش... :)")
 	common.IsErr(err)
 
 	folderName := common.RandStr(5)
@@ -31,6 +32,13 @@ func SaveAndSend(link string, c tele.Context) error {
 
 	cmdRemoveDir := exec.Command("rm", " -rf", folderName)
 	_, err = cmdRemoveDir.Output()
+
+	if err != nil {
+		time.Sleep(5 * time.Second)
+		err := c.Send("اینو نمیتونم برات دانلود کنم برو سراغ یه آهنگ دیگه... :(")
+		return err
+
+	}
 
 	return err
 }

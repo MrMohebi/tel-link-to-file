@@ -29,9 +29,16 @@ func main() {
 		return
 	}
 
+	b.Handle("/start", func(c tele.Context) error {
+		welcomeMsg := c.Send("کافیه که فقط لینک مستقیم آهنگ یا لینک اسپاتیفای رو برام بفرستی و منم آهنگی که دنبالشی رو برات میفرستم.\nیادت نره که سلام مارو به همونی که داری براش آهنگ دانلود میکنی برسونی... XD ")
+		return welcomeMsg
+	})
+
 	b.Handle(tele.OnText, func(c tele.Context) error {
 		url := c.Text()
+
 		println(url)
+
 		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
 			return spoty.SaveAndSend(url, c)
 		}
@@ -44,7 +51,7 @@ func main() {
 		println(kind.MIME.Value)
 
 		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-			err := c.Send("working on it... :)")
+			err := c.Send("دو دقه بل الان برات دانلودش میکنم... ")
 			common.IsErr(err)
 
 			resp, err := http.Get(url)
@@ -60,7 +67,7 @@ func main() {
 			})
 		}
 
-		return c.Send("please send an audio link")
+		return c.Send("میدونی که باید برام لینک بفرستی درسته؟!")
 	})
 
 	b.Start()
