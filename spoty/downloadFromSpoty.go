@@ -19,12 +19,15 @@ func SaveAndSend(link string, c tele.Context) error {
 	common.IsErr(err)
 
 	for _, e := range entries {
-		audio := &tele.Audio{File: tele.FromDisk(e.Name())}
+		audio := &tele.Audio{File: tele.FromDisk(folderName + "/" + e.Name())}
 		err := c.Send(audio, &tele.SendOptions{
 			ReplyTo: c.Message(),
 		})
 		common.IsErr(err)
 	}
+
+	cmdRemoveDir := exec.Command("rm", " -rf", folderName)
+	_, err = cmdRemoveDir.Output()
 
 	return err
 }
