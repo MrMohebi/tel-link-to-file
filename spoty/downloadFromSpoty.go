@@ -7,10 +7,10 @@ import (
 
 func DownloadAndSave(link string) {
 	folderName := common.RandStr(5)
-	cmdMkdir := exec.Command("/bin/sh", "-c", "mkdir", folderName)
+	cmdMkdir := exec.Command("mkdir", "-p", "~/"+folderName)
 	_, err := cmdMkdir.Output()
 
-	cmd := exec.Command("/bin/sh", "-c", "spotdl", "download", link, "--output", "/root/"+folderName+"/{artist} - {title}.{output-ext}'")
+	cmd := exec.Command("spotdl", "download", link, "--output", "~/"+folderName+"/{artist} - {title}.{output-ext}'")
 	_, err = cmd.Output()
 	common.IsErr(err)
 
