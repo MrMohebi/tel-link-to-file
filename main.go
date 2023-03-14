@@ -33,7 +33,7 @@ func main() {
 		url := c.Text()
 		println(url)
 		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
-			spoty.DownloadAndSave(url)
+			return spoty.SaveAndSend(url)
 		}
 
 		extension := filepath.Ext(url)
