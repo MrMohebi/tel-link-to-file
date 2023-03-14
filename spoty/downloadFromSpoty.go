@@ -1,13 +1,13 @@
 package spoty
 
 import (
-	"fmt"
 	"github.com/MrMohebi/tel-link-to-file/common"
+	tele "gopkg.in/telebot.v3"
 	"os"
 	"os/exec"
 )
 
-func SaveAndSend(link string) error {
+func SaveAndSend(link string, c tele.Context) error {
 	folderName := common.RandStr(5)
 	cmdMkdir := exec.Command("mkdir", folderName)
 	_, err := cmdMkdir.Output()
@@ -19,7 +19,11 @@ func SaveAndSend(link string) error {
 	common.IsErr(err)
 
 	for _, e := range entries {
-		fmt.Println(e.Name())
+		audio := &tele.Audio{File: tele.FromDisk(e.Name())}
+		err := c.Send(audio, &tele.SendOptions{
+			ReplyTo: c.Message(),
+		})
+		common.IsErr(err)
 	}
 
 	return err

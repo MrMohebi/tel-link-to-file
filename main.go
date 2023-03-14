@@ -33,7 +33,7 @@ func main() {
 		url := c.Text()
 		println(url)
 		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
-			return spoty.SaveAndSend(url)
+			return spoty.SaveAndSend(url, c)
 		}
 
 		extension := filepath.Ext(url)
@@ -44,7 +44,9 @@ func main() {
 		println(kind.MIME.Value)
 
 		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-			c.Send("working on it... :)")
+			err := c.Send("working on it... :)")
+			common.IsErr(err)
+
 			resp, err := http.Get(url)
 			if err != nil {
 				log.Fatal(err)
