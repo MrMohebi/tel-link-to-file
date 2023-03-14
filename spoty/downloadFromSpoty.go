@@ -8,9 +8,12 @@ import (
 )
 
 func SaveAndSend(link string, c tele.Context) error {
+	err := c.Send("working on it... :)")
+	common.IsErr(err)
+
 	folderName := common.RandStr(5)
 	cmdMkdir := exec.Command("mkdir", folderName)
-	_, err := cmdMkdir.Output()
+	_, err = cmdMkdir.Output()
 
 	cmd := exec.Command("spotdl", "download", link, "--output", folderName+"/{artist} - {title}.{output-ext}'")
 	_, err = cmd.Output()
