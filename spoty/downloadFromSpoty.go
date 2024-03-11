@@ -10,7 +10,7 @@ import (
 
 func SaveAndSend(link string, c tele.Context) error {
 	err := c.Send("ای کلک میخوای از اسپاتیفای دانلود کنی؟\nالان میرم تو کارش... :)")
-	common.IsErr(err)
+	common.IsErr(err, true)
 
 	folderName := common.RandStr(5)
 	cmdMkdir := exec.Command("mkdir", folderName)
@@ -20,14 +20,14 @@ func SaveAndSend(link string, c tele.Context) error {
 	_, err = cmd.Output()
 
 	entries, err := os.ReadDir(folderName)
-	common.IsErr(err)
+	common.IsErr(err, true)
 
 	for _, e := range entries {
 		audio := &tele.Audio{File: tele.FromDisk(folderName + "/" + e.Name())}
-		err := c.Send(audio, &tele.SendOptions{
+		err = c.Send(audio, &tele.SendOptions{
 			ReplyTo: c.Message(),
 		})
-		common.IsErr(err)
+		common.IsErr(err, true)
 	}
 
 	cmdRemoveDir := exec.Command("rm", " -rf", folderName)
@@ -35,10 +35,9 @@ func SaveAndSend(link string, c tele.Context) error {
 
 	if err != nil {
 		time.Sleep(5 * time.Second)
-		err := c.Send("اینو نمیتونم برات دانلود کنم برو سراغ یه آهنگ دیگه... :(")
+		err = c.Send("اینو نمیتونم برات دانلود کنم برو سراغ یه آهنگ دیگه... :(")
 		return err
 
 	}
-
 	return err
 }
