@@ -83,9 +83,21 @@ func main() {
 				err := output.Close()
 				if err != nil {
 					common.IsErr(err, true)
+					err := os.Remove(filePath)
+					if err != nil {
+						common.IsErr(err, true)
+					}
 				}
 			}(output)
+
 			_, err = io.Copy(output, resp.Body)
+			if err != nil {
+				common.IsErr(err, true)
+				err := os.Remove(filePath)
+				if err != nil {
+					common.IsErr(err, true)
+				}
+			}
 
 			audio := &tele.Audio{File: tele.FromDisk(filePath)}
 
