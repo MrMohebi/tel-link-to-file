@@ -41,8 +41,6 @@ func main() {
 	b.Handle(tele.OnText, func(c tele.Context) error {
 		url := c.Text()
 
-		println(url)
-
 		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
 			return spoty.SaveAndSend(url, c)
 		}
@@ -53,25 +51,22 @@ func main() {
 		name = strings.ReplaceAll(name, "%20", " ")
 		name = strings.ReplaceAll(name, "+", " ")
 		filePath := name + "." + extension
-		println(filePath)
 
 		kind := filetype.GetType(extension)
 
-		println(kind.MIME.Value)
-
 		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
 			err = c.Send("دو دقه بل الان برات دانلودش میکنم... ")
-			common.IsErr(err, true)
+			common.IsErr(err, false)
 
 			resp, err := http.Get(url)
-			common.IsErr(err, true)
+			common.IsErr(err, false)
 			if resp.StatusCode != http.StatusOK {
 				return c.Send("این لینک رو نمیتونم جایی پیدا کنم... ):")
 			}
 
 			defer func(Body io.ReadCloser) {
 				err = Body.Close()
-				common.IsErr(err, true)
+				common.IsErr(err, false)
 			}(resp.Body)
 
 			output, err := os.Create(filePath)
@@ -82,20 +77,20 @@ func main() {
 			defer func(output *os.File) {
 				err := output.Close()
 				if err != nil {
-					common.IsErr(err, true)
+					common.IsErr(err, false)
 					err := os.Remove(filePath)
 					if err != nil {
-						common.IsErr(err, true)
+						common.IsErr(err, false)
 					}
 				}
 			}(output)
 
 			_, err = io.Copy(output, resp.Body)
 			if err != nil {
-				common.IsErr(err, true)
+				common.IsErr(err, false)
 				err := os.Remove(filePath)
 				if err != nil {
-					common.IsErr(err, true)
+					common.IsErr(err, false)
 				}
 			}
 
@@ -105,12 +100,12 @@ func main() {
 				ReplyTo: c.Message(),
 			})
 			if err != nil {
-				common.IsErr(err, true, "Failed to send the file.")
+				common.IsErr(err, false, "Failed to send the file.")
 			}
 
 			err = os.Remove(filePath)
 			if err != nil {
-				common.IsErr(err, true, "Failed to remove the file.")
+				common.IsErr(err, false, "Failed to remove the file.")
 			}
 			return err
 		}
