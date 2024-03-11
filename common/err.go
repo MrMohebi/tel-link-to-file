@@ -2,12 +2,23 @@ package common
 
 import "log"
 
-func IsErr(err error, message ...string) {
+func IsErr(err error, fatal bool, message ...string) {
+
 	if err != nil {
+
 		if len(message) != 0 {
-			log.Fatal(message)
+			if fatal {
+				log.Fatal(message)
+			} else {
+				log.Println(message)
+			}
 			return
 		}
-		log.Fatal(err)
+		if fatal {
+			log.Fatal(err)
+		} else {
+			log.Println(err)
+		}
 	}
+
 }
