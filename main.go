@@ -31,13 +31,6 @@ func main() {
 		return
 	}
 
-	//b.Handle(tele.OnAnimation, func(c tele.Context) error {
-	//	gif := tele.Animation{File: tele.FromDisk("assets/animation.gif")}
-	//	println("FileName: " + gif.FileName)
-	//	err := c.Send(gif)
-	//	return err
-	//})
-
 	b.Handle("/start", func(c tele.Context) error {
 		welcomeMsg := c.Send("کافیه که فقط لینک مستقیم آهنگ یا لینک اسپاتیفای رو برام بفرستی و منم آهنگی که دنبالشی رو برات میفرستم.\nیادت نره که سلام مارو به همونی که داری براش آهنگ دانلود میکنی برسونی... XD ")
 		return welcomeMsg
