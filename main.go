@@ -7,8 +7,10 @@ import (
 	"github.com/h2non/filetype/types"
 	"gopkg.in/ini.v1"
 	tele "gopkg.in/telebot.v3"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +18,8 @@ import (
 
 var isIniInitOnce = false
 var IniData *ini.File
+
+/////////// nodemon --exec go run main.go --signal SIGTERM
 
 func main() {
 	pref := tele.Settings{
@@ -37,34 +41,73 @@ func main() {
 	b.Handle(tele.OnText, func(c tele.Context) error {
 		url := c.Text()
 
-		println(url)
-
 		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
 			return spoty.SaveAndSend(url, c)
 		}
 
-		extension := filepath.Ext(url)
+		extension := filepath.Base(url)
+		name, extension, _ := strings.Cut(extension, ".")
 		extension = strings.TrimLeft(extension, ".")
+		name = strings.ReplaceAll(name, "%20", " ")
+		name = strings.ReplaceAll(name, "+", " ")
+		filePath := name + "." + extension
 
 		kind := filetype.GetType(extension)
 
-		println(kind.MIME.Value)
-
 		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-			err := c.Send("دو دقه بل الان برات دانلودش میکنم... ")
-			common.IsErr(err)
+			err = c.Send("دو دقه بل الان برات دانلودش میکنم... ")
+			common.IsErr(err, false)
 
 			resp, err := http.Get(url)
-			if err != nil {
-				log.Fatal(err)
+			common.IsErr(err, false)
+			if resp.StatusCode != http.StatusOK {
+				return c.Send("این لینک رو نمیتونم جایی پیدا کنم... ):")
 			}
-			defer resp.Body.Close()
 
-			audio := &tele.Audio{File: tele.FromReader(resp.Body)}
+			defer func(Body io.ReadCloser) {
+				err = Body.Close()
+				common.IsErr(err, false)
+			}(resp.Body)
 
-			return c.Send(audio, &tele.SendOptions{
+			output, err := os.Create(filePath)
+
+			if err != nil {
+				return err
+			}
+			defer func(output *os.File) {
+				err := output.Close()
+				if err != nil {
+					common.IsErr(err, false)
+					err := os.Remove(filePath)
+					if err != nil {
+						common.IsErr(err, false)
+					}
+				}
+			}(output)
+
+			_, err = io.Copy(output, resp.Body)
+			if err != nil {
+				common.IsErr(err, false)
+				err := os.Remove(filePath)
+				if err != nil {
+					common.IsErr(err, false)
+				}
+			}
+
+			audio := &tele.Audio{File: tele.FromDisk(filePath)}
+
+			err = c.Send(audio, &tele.SendOptions{
 				ReplyTo: c.Message(),
 			})
+			if err != nil {
+				common.IsErr(err, false, "Failed to send the file.")
+			}
+
+			err = os.Remove(filePath)
+			if err != nil {
+				common.IsErr(err, false, "Failed to remove the file.")
+			}
+			return err
 		}
 
 		return c.Send("میدونی که باید برام لینک بفرستی درسته؟!")
@@ -78,7 +121,7 @@ func IniSetup() {
 	if !isIniInitOnce {
 		var err error
 		IniData, err = ini.Load("config.ini")
-		common.IsErr(err, "Error loading .ini file")
+		common.IsErr(err, true, "Error loading .ini file")
 		isIniInitOnce = true
 	} else {
 		println("initialized inis once")
