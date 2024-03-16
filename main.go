@@ -2,18 +2,14 @@ package main
 
 import (
 	"github.com/MrMohebi/tel-link-to-file/common"
-	"github.com/MrMohebi/tel-link-to-file/spoty"
+	telBot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/types"
 	"gopkg.in/ini.v1"
-	tele "gopkg.in/telebot.v3"
-	"io"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 var isIniInitOnce = false
@@ -22,99 +18,76 @@ var IniData *ini.File
 /////////// nodemon --exec go run main.go --signal SIGTERM
 
 func main() {
-	pref := tele.Settings{
-		Token:  IniGet("", "TOKEN"),
-		Poller: &tele.LongPoller{Timeout: 60 * time.Second},
-	}
-
-	b, err := tele.NewBot(pref)
+	bot, err := telBot.NewBotAPI(IniGet("", "TOKEN"))
 	if err != nil {
-		log.Fatal(err)
-		return
+		common.IsErr(err, true, "Failed to start the bot!")
 	}
 
-	b.Handle("/start", func(c tele.Context) error {
-		welcomeMsg := c.Send("کافیه که فقط لینک مستقیم آهنگ یا لینک اسپاتیفای رو برام بفرستی و منم آهنگی که دنبالشی رو برات میفرستم.\nیادت نره که سلام مارو به همونی که داری براش آهنگ دانلود میکنی برسونی... XD ")
-		return welcomeMsg
-	})
+	u := telBot.NewUpdate(0)
+	u.Timeout = 60
 
-	b.Handle(tele.OnText, func(c tele.Context) error {
-		url := c.Text()
+	message := bot.GetUpdatesChan(u)
 
-		if len(url) > 27 && url[:24] == "https://open.spotify.com" {
-			return spoty.SaveAndSend(url, c)
-		}
+	for message := range message {
+		if message.Message != nil {
+			log.Printf("[%s] %s", message.Message.From.UserName, message.Message.Text)
 
-		extension := filepath.Base(url)
-		name, extension, _ := strings.Cut(extension, ".")
-		extension = strings.TrimLeft(extension, ".")
-		name = strings.ReplaceAll(name, "%20", " ")
-		name = strings.ReplaceAll(name, "+", " ")
-		filePath := name + "." + extension
+			chatId := message.Message.Chat.ID
 
-		kind := filetype.GetType(extension)
-
-		if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-			err = c.Send("دو دقه بل الان برات دانلودش میکنم... ")
-			common.IsErr(err, false)
-
-			resp, err := http.Get(url)
-			common.IsErr(err, false)
-			if resp.StatusCode != http.StatusOK {
-				return c.Send("این لینک رو نمیتونم جایی پیدا کنم... ):")
-			}
-
-			defer func(Body io.ReadCloser) {
-				err = Body.Close()
-				common.IsErr(err, false)
-			}(resp.Body)
-
-			output, err := os.Create(filePath)
-
-			if err != nil {
-				return err
-			}
-			defer func(output *os.File) {
-				err := output.Close()
+			if message.Message.Text == "/start" {
+				_, err = bot.Send(telBot.NewMessage(chatId, "Send me the link."))
 				if err != nil {
-					common.IsErr(err, false)
-					err := os.Remove(filePath)
+					log.Print("Failed to send the message.")
+				}
+			} else {
+				url := message.Message.Text
+
+				extension := filepath.Base(url)
+				name, extension, _ := strings.Cut(extension, ".")
+				name = strings.ReplaceAll(name, "%20", " ")
+				name = strings.ReplaceAll(name, "+", " ")
+				filePath := name + "." + extension
+
+				kind := filetype.GetType(extension)
+
+				if kind != types.Unknown && isAudioType(kind.MIME.Value) {
+					_, err = bot.Send(telBot.NewMessage(chatId, "I'm working on it :D"))
+
+					resp, err := http.Get(url)
 					if err != nil {
-						common.IsErr(err, false)
+						common.IsErr(err, false, "Failed to download the file.")
+						return
 					}
+
+					if resp.StatusCode != http.StatusOK {
+						_, err = bot.Send(telBot.NewMessage(chatId, "404, Not Found"))
+					} else {
+						//defer func(Body io.ReadCloser) {
+						//    err = Body.Close()
+						//    common.IsErr(err, false)
+						//}(resp.Body)
+
+						file := telBot.FileReader{
+							Name:   filePath,
+							Reader: resp.Body,
+						}
+
+						audio := telBot.NewAudio(chatId, file)
+						audio.ReplyToMessageID = message.Message.MessageID
+
+						_, err = bot.Send(audio)
+						if err != nil {
+							common.IsErr(err, false)
+							return
+						}
+					}
+
+				} else {
+					_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
 				}
-			}(output)
-
-			_, err = io.Copy(output, resp.Body)
-			if err != nil {
-				common.IsErr(err, false)
-				err := os.Remove(filePath)
-				if err != nil {
-					common.IsErr(err, false)
-				}
 			}
-
-			audio := &tele.Audio{File: tele.FromDisk(filePath)}
-
-			err = c.Send(audio, &tele.SendOptions{
-				ReplyTo: c.Message(),
-			})
-			if err != nil {
-				common.IsErr(err, false, "Failed to send the file.")
-			}
-
-			err = os.Remove(filePath)
-			if err != nil {
-				common.IsErr(err, false, "Failed to remove the file.")
-			}
-			return err
 		}
-
-		return c.Send("میدونی که باید برام لینک بفرستی درسته؟!")
-	})
-
-	b.Start()
-
+	}
 }
 
 func IniSetup() {
