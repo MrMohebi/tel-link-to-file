@@ -43,10 +43,13 @@ func main() {
 				url := message.Message.Text
 
 				extension := filepath.Base(url)
-				name, extension, _ := strings.Cut(extension, ".")
+				name, _ := strings.CutSuffix(extension, "mp3")
+				extension, _ = strings.CutPrefix(extension, name)
 				name = strings.ReplaceAll(name, "%20", " ")
 				name = strings.ReplaceAll(name, "+", " ")
-				filePath := name + "." + extension
+				filePath := name + extension
+
+				print(filePath)
 
 				kind := filetype.GetType(extension)
 
