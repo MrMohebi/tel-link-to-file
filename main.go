@@ -5,9 +5,13 @@ import (
 	telBot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/h2non/filetype"
 	"github.com/h2non/filetype/types"
+	"github.com/kkdai/youtube/v2"
+	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"gopkg.in/ini.v1"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -35,58 +39,45 @@ func main() {
 			chatId := message.Message.Chat.ID
 
 			if message.Message.Text == "/start" {
-				_, err = bot.Send(telBot.NewMessage(chatId, "Send me the link."))
-				if err != nil {
-					log.Print("Failed to send the message.")
-				}
+				onStart(bot, chatId)
 			} else {
-				url := message.Message.Text
+				text := message.Message.Text
+				isMP3Link := strings.Contains(text, ".mp3")
+				isYTMLink := strings.Contains(text, "music.youtube.com")
 
-				extension := filepath.Base(url)
-				name, _ := strings.CutSuffix(extension, "mp3")
-				extension, _ = strings.CutPrefix(extension, name)
-				name = strings.ReplaceAll(name, "%20", " ")
-				name = strings.ReplaceAll(name, "+", " ")
-				filePath := name + extension
+				fileName := ""
 
-				print(filePath)
+				var audioFile io.ReadCloser
 
-				kind := filetype.GetType(extension)
+				if isYTMLink {
+					_, err = bot.Send(telBot.NewMessage(chatId, "Downloading from YTM... :D"))
+					audioFile, fileName = downloadFromYTM(text)
 
-				if kind != types.Unknown && isAudioType(kind.MIME.Value) {
+				} else if isMP3Link {
 					_, err = bot.Send(telBot.NewMessage(chatId, "I'm working on it :D"))
-
-					resp, err := http.Get(url)
-					if err != nil {
-						common.IsErr(err, false, "Failed to download the file.")
-						return
-					}
-
-					if resp.StatusCode != http.StatusOK {
-						_, err = bot.Send(telBot.NewMessage(chatId, "404, Not Found"))
-					} else {
-						//defer func(Body io.ReadCloser) {
-						//    err = Body.Close()
-						//    common.IsErr(err, false)
-						//}(resp.Body)
-
-						file := telBot.FileReader{
-							Name:   filePath,
-							Reader: resp.Body,
-						}
-
-						audio := telBot.NewAudio(chatId, file)
-						audio.ReplyToMessageID = message.Message.MessageID
-
-						_, err = bot.Send(audio)
-						if err != nil {
-							common.IsErr(err, false)
-							return
-						}
-					}
+					audioFile, fileName = downloadFromMP3Link(text)
 
 				} else {
 					_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
+					continue
+				}
+
+				if audioFile == nil {
+					_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
+					continue
+				}
+
+				file := telBot.FileReader{
+					Name:   fileName,
+					Reader: audioFile,
+				}
+
+				audio := telBot.NewAudio(chatId, file)
+				audio.ReplyToMessageID = message.Message.MessageID
+
+				_, err = bot.Send(audio)
+				if err != nil {
+					common.IsErr(err, false)
 				}
 			}
 		}
@@ -113,4 +104,67 @@ func IniGet(section string, key string) string {
 
 func isAudioType(filetype string) bool {
 	return filetype[:6] == "audio/"
+}
+
+func downloadFromMP3Link(link string) (io.ReadCloser, string) {
+
+	extension := filepath.Base(link)
+	name, _ := strings.CutSuffix(extension, "mp3")
+	extension, _ = strings.CutPrefix(extension, name)
+	name = strings.ReplaceAll(name, "%20", " ")
+	name = strings.ReplaceAll(name, "+", " ")
+	filePath := name + extension
+	kind := filetype.GetType(extension)
+
+	if kind != types.Unknown && isAudioType(kind.MIME.Value) {
+		resp, err := http.Get(link)
+		if err != nil {
+			common.IsErr(err, false, "Failed to download the file.")
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, ""
+		} else {
+			return resp.Body, filePath
+		}
+	} else {
+		return nil, ""
+	}
+}
+
+func downloadFromYTM(link string) (io.ReadCloser, string) {
+	client := youtube.Client{}
+
+	video, err := client.GetVideo(link)
+	formats := video.Formats.Type("audio")
+
+	stream, _, err := client.GetStream(video, &formats[0])
+	if err != nil {
+		common.IsErr(err, false)
+	}
+	defer stream.Close()
+
+	outputFile := video.Title + ".mp3"
+
+	err = ffmpeg.Input("pipe:").
+		Output(outputFile, ffmpeg.KwArgs{"c:a": "libmp3lame", "bitrate": "0", "f": "mp3", "vn": "", "metadata": "artist=" + video.Author}).WithInput(stream).
+		OverWriteOutput().ErrorToStdOut().Run()
+
+	audioFile, err := os.Open(outputFile)
+	if err != nil {
+		common.IsErr(err, false)
+	}
+	e := os.Remove(outputFile)
+	if e != nil {
+		common.IsErr(e, false)
+	}
+
+	return audioFile, outputFile
+}
+
+func onStart(bot *telBot.BotAPI, chatId int64) {
+	_, err := bot.Send(telBot.NewMessage(chatId, "Send me the link."))
+	if err != nil {
+		common.IsErr(err, false, "Failed to send the message.")
+	}
 }
