@@ -1,18 +1,15 @@
 package main
 
 import (
-	"fmt"
 	"io"
-	"net/http"
+	"log"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/MrMohebi/tel-link-to-file/common"
 	telBot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/h2non/filetype"
-	"github.com/h2non/filetype/types"
 	"github.com/kkdai/youtube/v2"
+	aria "github.com/siku2/arigo"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"gopkg.in/ini.v1"
 )
@@ -20,16 +17,88 @@ import (
 var isIniInitOnce = false
 var IniData *ini.File
 
+type File struct {
+    Reader io.ReadCloser
+    Name string
+}
+
 /////////// nodemon --exec go run main.go --signal SIGTERM
+// Arigo does NOT start aria2 WS at the moment. Run the following command to start aria2c: aria2c --enable-rpc --rpc-listen-all 
 
 func main() {
-    var link string
+    bot, err := telBot.NewBotAPI(IniGet("", "TOKEN"))
+	if err != nil {
+		common.IsErr(err, true)
+	}
 
-    fmt.Println("Enter the link:")
-    fmt.Scan(&link)
+	u := telBot.NewUpdate(0)
+	u.Timeout = 60
 
-    x, y := downloadFromMP3Link(link)
-    fmt.Println(x, y)
+	message := bot.GetUpdatesChan(u)
+
+	for message := range message {
+		if message.Message != nil {
+			log.Printf("[%s] %s", message.Message.From.UserName, message.Message.Text)
+
+			chatId := message.Message.Chat.ID
+
+			if message.Message.Text == "/start" {
+				onStart(bot, chatId)
+			} else {
+				text := message.Message.Text
+				isMP3Link := strings.Contains(text, ".mp3")
+				isYTMLink := strings.Contains(text, "music.youtube.com")
+
+				fileName := ""
+
+				var audioFile io.ReadCloser
+
+				if isYTMLink {
+					_, err = bot.Send(telBot.NewMessage(chatId, "Downloading from YTM... :D"))
+					audioFile, fileName = downloadFromYTM(text)
+
+				} else if isMP3Link {
+					_, err = bot.Send(telBot.NewMessage(chatId, "I'm working on it :D"))
+                    files := downloadViaAria(text)
+                    for _, file := range files {
+				        file := telBot.FileReader{
+				        	Name:   file.Name,
+				        	Reader: file.Reader,
+				        }
+				        audio := telBot.NewAudio(chatId, file)
+				        audio.ReplyToMessageID = message.Message.MessageID
+
+				        _, err = bot.Send(audio)
+				        if err != nil {
+				        	common.IsErr(err, false)
+				        }
+                    }
+                    continue
+				} else {
+					_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
+					continue
+				}
+
+				if audioFile == nil {
+					_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
+					continue
+				}
+
+				file := telBot.FileReader{
+					Name:   fileName,
+					Reader: audioFile,
+				}
+
+				audio := telBot.NewAudio(chatId, file)
+				audio.ReplyToMessageID = message.Message.MessageID
+
+				_, err = bot.Send(audio)
+				if err != nil {
+					common.IsErr(err, false)
+				}
+			}
+		}
+	}
 }
 
 func IniSetup() {
@@ -48,35 +117,6 @@ func IniGet(section string, key string) string {
 		IniSetup()
 	}
 	return IniData.Section(section).Key(key).String()
-}
-
-func isAudioType(filetype string) bool {
-	return filetype[:6] == "audio/"
-}
-
-func downloadFromMP3Link(link string) (io.ReadCloser, string) {
-	extension := filepath.Base(link)
-	name, _ := strings.CutSuffix(extension, "mp3")
-	extension, _ = strings.CutPrefix(extension, name)
-	name = strings.ReplaceAll(name, "%20", " ")
-	name = strings.ReplaceAll(name, "+", " ")
-	filePath := name + extension
-	kind := filetype.GetType(extension)
-
-	if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-		resp, err := http.Get(link)
-		if err != nil {
-			common.IsErr(err, false, "Failed to download the file.")
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, ""
-		} else {
-			return resp.Body, filePath
-		}
-	} else {
-		return nil, ""
-	}
 }
 
 func downloadFromYTM(link string) (io.ReadCloser, string) {
@@ -114,4 +154,50 @@ func onStart(bot *telBot.BotAPI, chatId int64) {
 	if err != nil {
 		common.IsErr(err, false, "Failed to send the message.")
 	}
+}
+
+func startArigo ()*aria.Client {
+	c, err := aria.Dial("ws://localhost:6800/jsonrpc", "")
+	if err != nil {
+        common.IsErr(err, false)
+	}
+
+    return c
+}
+
+func downloadViaAria(link string) []File { 
+    c := startArigo()
+
+    p, err := c.Download(aria.URIs(link), nil)
+	if err != nil {
+        common.IsErr(err, false)
+	}
+
+    if p.Status == aria.StatusCompleted {
+        ariaFiles := p.Files
+        files := []File{}
+
+        if (len(ariaFiles) > 0) {
+            for _, file := range ariaFiles {
+                outputFile := file.Path
+            	audioFile, err := os.Open(outputFile)
+	            if err != nil {
+                    common.IsErr(err, false)
+	            }
+	            err = os.Remove(outputFile)
+	            if err != nil {
+	            	common.IsErr(err, false)
+	            }
+
+                newFile := File{
+                    Reader: audioFile,
+                    Name:   outputFile,
+                }
+
+                files = append(files, newFile) 
+            }
+            return files
+        }
+    }
+    return nil
 }
