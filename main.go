@@ -4,16 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/MrMohebi/tel-link-to-file/common"
+	"github.com/MrMohebi/tel-link-to-file/ytdlp"
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/go-resty/resty/v2"
 	telBot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/kkdai/youtube/v2"
-	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"gopkg.in/ini.v1"
 	"io"
 	"log"
 	"net/url"
-	"os"
 	"path"
 	"strings"
 )
@@ -49,12 +47,15 @@ func main() {
 
 				fileName := ""
 
-				var audioFile io.ReadCloser
+				var audioFile io.Reader
 
 				if isYTMLink {
-					_, err = bot.Send(telBot.NewMessage(chatId, "Downloading from YTM... :D"))
-					audioFile, fileName = downloadFromYTM(text)
-
+					audioFile, fileName, err = ytdlp.GetAudio(text)
+					if err != nil {
+						log.Println(err)
+						common.IsErr(err, false)
+						_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
+					}
 				} else if isMP3Link {
 					_, err = bot.Send(telBot.NewMessage(chatId, "I'm working on it :D"))
 					audioFile, fileName, err = DownloadFromLink(text)
@@ -108,7 +109,7 @@ func IniGet(section string, key string) string {
 	return IniData.Section(section).Key(key).String()
 }
 
-func DownloadFromLink(link string) (io.ReadCloser, string, error) {
+func DownloadFromLink(link string) (io.Reader, string, error) {
 	client := resty.New()
 
 	resp, err := client.R().SetDoNotParseResponse(true).Get(link)
@@ -129,8 +130,7 @@ func DownloadFromLink(link string) (io.ReadCloser, string, error) {
 
 	fileName := extractFileName(resp, link)
 
-	reader := io.NopCloser(bytes.NewReader(data))
-	return reader, fileName, nil
+	return bytes.NewReader(data), fileName, nil
 }
 
 func extractFileName(resp *resty.Response, fileURL string) string {
@@ -153,36 +153,6 @@ func extractFileName(resp *resty.Response, fileURL string) string {
 	}
 
 	return "unknown_audio_file"
-}
-
-func downloadFromYTM(link string) (io.ReadCloser, string) {
-	client := youtube.Client{}
-
-	video, err := client.GetVideo(link)
-	formats := video.Formats.Type("audio")
-
-	stream, _, err := client.GetStream(video, &formats[0])
-	if err != nil {
-		common.IsErr(err, false)
-	}
-	defer stream.Close()
-
-	outputFile := video.Title + ".mp3"
-
-	err = ffmpeg.Input("pipe:").
-		Output(outputFile, ffmpeg.KwArgs{"c:a": "libmp3lame", "bitrate": "0", "f": "mp3", "vn": "", "metadata": "artist=" + video.Author}).WithInput(stream).
-		OverWriteOutput().ErrorToStdOut().Run()
-
-	audioFile, err := os.Open(outputFile)
-	if err != nil {
-		common.IsErr(err, false)
-	}
-	e := os.Remove(outputFile)
-	if e != nil {
-		common.IsErr(e, false)
-	}
-
-	return audioFile, outputFile
 }
 
 func onStart(bot *telBot.BotAPI, chatId int64) {

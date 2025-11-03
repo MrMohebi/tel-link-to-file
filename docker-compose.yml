@@ -1,5 +1,4 @@
 # ports: HOST:CONTAINER
-version: '3.8'
 services:
   link-to-file:
     build: .
