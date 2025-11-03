@@ -1,18 +1,20 @@
 package main
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/MrMohebi/tel-link-to-file/common"
+	"github.com/gabriel-vasile/mimetype"
+	"github.com/go-resty/resty/v2"
 	telBot "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/h2non/filetype"
-	"github.com/h2non/filetype/types"
 	"github.com/kkdai/youtube/v2"
 	ffmpeg "github.com/u2takey/ffmpeg-go"
 	"gopkg.in/ini.v1"
 	"io"
 	"log"
-	"net/http"
+	"net/url"
 	"os"
-	"path/filepath"
+	"path"
 	"strings"
 )
 
@@ -55,7 +57,11 @@ func main() {
 
 				} else if isMP3Link {
 					_, err = bot.Send(telBot.NewMessage(chatId, "I'm working on it :D"))
-					audioFile, fileName = downloadFromMP3Link(text)
+					audioFile, fileName, err = DownloadFromLink(text)
+					if err != nil {
+						common.IsErr(err, false)
+						_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
+					}
 
 				} else {
 					_, err = bot.Send(telBot.NewMessage(chatId, "Invalid input!"))
@@ -102,34 +108,51 @@ func IniGet(section string, key string) string {
 	return IniData.Section(section).Key(key).String()
 }
 
-func isAudioType(filetype string) bool {
-	return filetype[:6] == "audio/"
+func DownloadFromLink(link string) (io.ReadCloser, string, error) {
+	client := resty.New()
+
+	resp, err := client.R().SetDoNotParseResponse(true).Get(link)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.RawBody().Close()
+
+	data, err := io.ReadAll(resp.RawBody())
+	if err != nil {
+		return nil, "", err
+	}
+
+	mime := mimetype.Detect(data)
+	if mime == nil || !strings.HasPrefix(mime.String(), "audio/") {
+		return nil, "", fmt.Errorf("not an audio file (detected: %s)", mime.String())
+	}
+
+	fileName := extractFileName(resp, link)
+
+	reader := io.NopCloser(bytes.NewReader(data))
+	return reader, fileName, nil
 }
 
-func downloadFromMP3Link(link string) (io.ReadCloser, string) {
-
-	extension := filepath.Base(link)
-	name, _ := strings.CutSuffix(extension, "mp3")
-	extension, _ = strings.CutPrefix(extension, name)
-	name = strings.ReplaceAll(name, "%20", " ")
-	name = strings.ReplaceAll(name, "+", " ")
-	filePath := name + extension
-	kind := filetype.GetType(extension)
-
-	if kind != types.Unknown && isAudioType(kind.MIME.Value) {
-		resp, err := http.Get(link)
-		if err != nil {
-			common.IsErr(err, false, "Failed to download the file.")
+func extractFileName(resp *resty.Response, fileURL string) string {
+	cd := resp.Header().Get("Content-Disposition")
+	if cd != "" {
+		if parts := strings.Split(cd, "filename="); len(parts) > 1 {
+			name := strings.Trim(parts[1], "\"; ")
+			if name != "" {
+				return name
+			}
 		}
-
-		if resp.StatusCode != http.StatusOK {
-			return nil, ""
-		} else {
-			return resp.Body, filePath
-		}
-	} else {
-		return nil, ""
 	}
+
+	u, err := url.Parse(fileURL)
+	if err == nil {
+		name := path.Base(u.Path)
+		if name != "" && name != "/" {
+			return name
+		}
+	}
+
+	return "unknown_audio_file"
 }
 
 func downloadFromYTM(link string) (io.ReadCloser, string) {
